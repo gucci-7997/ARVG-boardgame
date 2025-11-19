@@ -69,11 +69,12 @@
         </div>
       </div>
     </section>
-  </main> <footer>
+  </main> 
+  
+  <footer>
     <p>&copy; 2025 Mottainai Games. All rights reserved.</p>
   </footer>
     
-    </main>
 
   <div id="loading-screen" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; z-index: 9999; flex-direction: column; justify-content: center; align-items: center;">
     <p>データを読み込み中...</p>
@@ -107,11 +108,11 @@
     let activeAudio = null;
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-    // 3Dモデル読み込み用の設定
     const loader = new THREE.GLTFLoader();
-    let loadedModel = null; // 読み込んだモデルをここに保存
+    let loadedModel = null;
+    // ★アニメーション管理用の配列
+    let animatedModels = []; 
 
-    // 時間フォーマット関数
     function formatTime(seconds) {
       if (isNaN(seconds) || !isFinite(seconds)) return "0:00";
       const m = Math.floor(seconds / 60);
@@ -119,7 +120,6 @@
       return `${m}:${s < 10 ? '0' : ''}${s}`;
     }
 
-    // 音声リスト読み込み
     fetch('assets/audio/list.json')
       .then(res => res.json())
       .then(list => {
@@ -130,7 +130,6 @@
           audio.playsInline = true;
           audioContainer.appendChild(audio);
 
-          // 時間更新処理
           const updateDuration = () => {
             if (activeAudio === audio && isFinite(audio.duration)) {
               durationLabel.innerText = formatTime(audio.duration);
@@ -139,16 +138,14 @@
           audio.addEventListener('loadedmetadata', updateDuration);
           audio.addEventListener('durationchange', updateDuration);
 
-          // 再生中の時間更新
           audio.addEventListener('timeupdate', () => {
-            if (activeAudio === audio && isFinite(audio.duration)) {
-              const value = (audio.currentTime / audio.duration) * 100;
+            if (activeAudio === audio && isFinite(activeAudio.duration)) {
+              const value = (activeAudio.currentTime / activeAudio.duration) * 100;
               seekBar.value = isNaN(value) ? 0 : value;
-              currentTimeLabel.innerText = formatTime(audio.currentTime);
+              currentTimeLabel.innerText = formatTime(activeAudio.currentTime);
             }
           });
 
-          // 再生終了時
           audio.addEventListener('ended', () => {
             playAudioBtn.innerText = "解説を再生";
             seekBar.value = 0;
@@ -160,7 +157,6 @@
       })
       .catch(err => console.error('JSON読み込みエラー:', err));
 
-    // ボタン制御
     playAudioBtn.addEventListener("click", () => {
       if (!activeAudio) return;
       if (activeAudio.paused) {
@@ -172,42 +168,51 @@
       }
     });
 
-    // シークバー操作
     seekBar.addEventListener("input", () => {
       if (!activeAudio || !isFinite(activeAudio.duration)) return;
       const time = (seekBar.value / 100) * activeAudio.duration;
       activeAudio.currentTime = time;
     });
 
-    // AR起動処理
     startBtn.addEventListener("click", async () => {
       document.querySelector('main').style.display = "none";
       document.querySelector('footer').style.display = "none";
       loadingScreen.style.display = "flex"; 
       arContainer.style.display = "block";
 
-      // スマホ対策: 音声をロードしておく
       audios.forEach(a => a.load());
 
-      // ★ 3Dモデルの読み込み処理
-      await new Promise((resolve, reject) => {
+      // ★ 3Dモデルの読み込みと白色マテリアル適用
+      await new Promise((resolve) => {
         loader.load(
-          'assets/models/meeple.glb', // ファイルパス
+          'assets/models/meeple.glb', 
           (gltf) => {
             loadedModel = gltf.scene;
-            // ここでモデルの基本サイズや向きを調整
-            // Fusionで作った場合、大きすぎることが多いので小さくする
-            loadedModel.scale.set(1, 1, 1); 
-            // 向きがおかしい（寝ている）場合はここを調整: rotation.x = Math.PI / 2 など
-            // loadedModel.rotation.x = Math.PI / 2; 
+            loadedModel.scale.set(0.1, 0.1, 0.1); // スケール調整
+            // loadedModel.rotation.x = Math.PI / 2; // 必要なら向き調整
             
-            console.log("モデル読み込み完了");
+            // ★ 白色マテリアルの作成と適用
+            const whiteMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffffff, // 白
+                roughness: 0.7,  // 粗さ
+                metalness: 0.1   // 金属感
+            });
+
+            loadedModel.traverse((child) => {
+                if (child.isMesh) {
+                    child.material = whiteMaterial;
+                    child.castShadow = true; // 影を落とす
+                    child.receiveShadow = true; // 影を受ける
+                }
+            });
+            
+            console.log("モデル読み込み完了、白色適用済み");
             resolve();
           },
           undefined,
           (error) => {
             console.error("モデル読み込みエラー", error);
-            resolve(); // エラーでもARは起動させる
+            resolve(); 
           }
         );
       });
@@ -219,22 +224,34 @@
 
       const { renderer, scene, camera } = mindarThree;
 
-      // ターゲットごとに設定
+      // 環境光と影の設定
+      const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.5);
+      scene.add(light);
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(0, 10, 5); // 光の方向
+      directionalLight.castShadow = true;
+      directionalLight.shadow.mapSize.width = 1024;
+      directionalLight.shadow.mapSize.height = 1024;
+      scene.add(directionalLight);
+      
+      renderer.shadowMap.enabled = true; // 影を有効にする
+
       for (let i = 0; i < audios.length; i++) {
         const anchor = mindarThree.addAnchor(i);
 
-        // ★ モデルを表示（アンカーに追加）
         if (loadedModel) {
-          // モデルを複製して追加（ターゲットが複数の場合のため）
           const modelClone = loadedModel.clone();
           anchor.group.add(modelClone);
           
-          // アニメーションがあれば再生（任意）
-          // const mixer = new THREE.AnimationMixer(modelClone);
-          // ...
+          // ★ クローンしたモデルをアニメーション管理配列に追加
+          animatedModels.push({
+             mesh: modelClone,
+             speed: 0.01 + Math.random() * 0.01, // 回転速度を少しランダムに
+             offset: Math.random() * 100 // 浮遊のタイミングをずらす
+          });
         }
 
-        // 認識時の処理（音声）
         anchor.onTargetFound = () => {
           console.log(`パッケージ${i}認識`);
 
@@ -273,14 +290,45 @@
 
         anchor.onTargetLost = () => {
             // ロストしても音声は継続
-            // ※ 3DモデルはMindARの仕様で自動的に非表示になります
         };
       }
 
       await mindarThree.start();
       loadingScreen.style.display = "none"; 
-      renderer.setAnimationLoop(() => { renderer.render(scene, camera); });
+
+      // ★ ここで毎フレームのアニメーションを実行
+      renderer.setAnimationLoop(() => {
+        const time = performance.now() / 1000; 
+
+        animatedModels.forEach(item => {
+            const model = item.mesh;
+            
+            // 1. Y軸回転（くるくる）
+            model.rotation.y += item.speed; 
+
+            // 2. 上下浮遊（ふわふわ）
+            // position.yはモデルの「足元」が基準なので、上に少し上げておく
+            model.position.y = 0.05 + Math.sin(time * 2 + item.offset) * 0.03; // ベース位置0.05 + 浮遊幅0.03
+        });
+
+        renderer.render(scene, camera);
+      });
     });
   </script>
 </body>
 </html>
+```http://googleusercontent.com/image_generation_content/1
+
+
+### 変更点まとめ
+
+1.  **HTML構造の修正**
+    * `<main>` タグが二重になっていた部分を修正し、`<footer>` が `<main>` の外側で閉じるようにしました。これでサイト全体のレイアウトが正しく表示されます。
+2.  **3Dモデルへの白色マテリアル適用**
+    * `loadedModel.traverse` を使って、読み込んだモデルのすべてのメッシュに `THREE.MeshStandardMaterial` で白色を設定しました。
+    * `roughness` (粗さ) や `metalness` (金属感) を調整することで、質感を変更できます。
+    * **ライトと影**: よりリアルな見た目にするため、シーンに環境光 (`HemisphereLight`) と指向性ライト (`DirectionalLight`) を追加し、影 (`shadowMap.enabled = true`) を有効にしました。これにより、白色のモデルでも立体感がしっかり出ます。
+3.  **アニメーション（回転と浮遊）**
+    * `animatedModels` 配列に、各アンカーにクローンされたモデルと、アニメーション用の設定（`speed`, `offset`）を保存します。
+    * `renderer.setAnimationLoop` の中で、`performance.now()` を使って現在の時間を取得し、それに基づいて各モデルの `rotation.y`（Y軸回転）と `position.y`（Y軸方向の上下浮遊）を変化させています。
+    * `model.position.y = 0.05 + Math.sin(time * 2 + item.offset) * 0.03;` の部分で、モデルの足元を少し持ち上げて（`0.05`）、その上で `Math.sin` を使ってふわふわと

@@ -22,6 +22,7 @@
         <button id="start-btn" class="start-button">ARガイドを起動</button>
       </div>
     </section>
+
     <section class="feature-section">
       <h2 class="section-title">このシステムの特徴</h2>
       <div class="features-grid">
@@ -75,7 +76,6 @@
     <p>&copy; 2025 Mottainai Games. All rights reserved.</p>
   </footer>
     
-
   <div id="loading-screen" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; z-index: 9999; flex-direction: column; justify-content: center; align-items: center;">
     <p>データを読み込み中...</p>
   </div>
@@ -110,7 +110,6 @@
 
     const loader = new THREE.GLTFLoader();
     let loadedModel = null;
-    // ★アニメーション管理用の配列
     let animatedModels = []; 
 
     function formatTime(seconds) {
@@ -182,31 +181,48 @@
 
       audios.forEach(a => a.load());
 
-      // ★ 3Dモデルの読み込みと白色マテリアル適用
+      // ★ 3Dモデルの読み込み処理（修正版）
       await new Promise((resolve) => {
         loader.load(
           'assets/models/meeple.glb', 
           (gltf) => {
-            loadedModel = gltf.scene;
-            loadedModel.scale.set(20, 20, 20); // スケール調整
-            // loadedModel.rotation.x = Math.PI / 2; // 必要なら向き調整
+            const rawModel = gltf.scene;
+
+            // --- ぐらぐら修正（中心座標の補正） ---
+            // 1. モデルの大きさを測る箱（BoundingBox）を作る
+            const box = new THREE.Box3().setFromObject(rawModel);
+            const center = box.getCenter(new THREE.Vector3());
             
-            // ★ 白色マテリアルの作成と適用
+            // 2. 「ピボット（中心点）」代わりの空のグループを作る
+            const wrapper = new THREE.Group();
+            
+            // 3. モデルを、中心が(0,0,0)に来るようにズラしてグループに入れる
+            // ※ Y軸（高さ）は、物体の底面(min.y)が0に来るようにして、箱の上に立つようにする
+            rawModel.position.set(-center.x, -box.min.y, -center.z);
+            
+            wrapper.add(rawModel);
+            loadedModel = wrapper; // このグループを「モデル」として扱う
+
+            // サイズ調整（グループ全体にかける）
+            // ※ Fusionモデルは巨大なことが多いので、少し小さめ(0.1)から試す
+            loadedModel.scale.set(0.1, 0.1, 0.1); 
+
+            // --- 黒色修正（マテリアルの発光設定） ---
             const whiteMaterial = new THREE.MeshStandardMaterial({
-                color: 0xffffff, // 白
-                roughness: 0.7,  // 粗さ
-                metalness: 0.1   // 金属感
+                color: 0xffffff,    // 基本の色：白
+                emissive: 0x666666, // 発光色：少し光らせる（これで黒くならない）
+                roughness: 0.3,     // ツルツル具合
+                metalness: 0.1      // 金属感
             });
 
-            loadedModel.traverse((child) => {
+            // モデル内の全パーツにこの「白い素材」を適用
+            rawModel.traverse((child) => {
                 if (child.isMesh) {
                     child.material = whiteMaterial;
-                    child.castShadow = true; // 影を落とす
-                    child.receiveShadow = true; // 影を受ける
                 }
             });
             
-            console.log("モデル読み込み完了、白色適用済み");
+            console.log("モデル読み込み完了、中心補正・白色適用済み");
             resolve();
           },
           undefined,
@@ -224,18 +240,15 @@
 
       const { renderer, scene, camera } = mindarThree;
 
-      // 環境光と影の設定
-      const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.5);
-      scene.add(light);
+      // ★ 照明の設定（ここを強化）
+      // 1. 環境光（全体を明るくする最強のライト）
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1.0); 
+      scene.add(ambientLight);
 
+      // 2. 指向性ライト（影をつけるための太陽のような光）
       const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      directionalLight.position.set(0, 10, 5); // 光の方向
-      directionalLight.castShadow = true;
-      directionalLight.shadow.mapSize.width = 1024;
-      directionalLight.shadow.mapSize.height = 1024;
+      directionalLight.position.set(5, 10, 7); 
       scene.add(directionalLight);
-      
-      renderer.shadowMap.enabled = true; // 影を有効にする
 
       for (let i = 0; i < audios.length; i++) {
         const anchor = mindarThree.addAnchor(i);
@@ -244,11 +257,10 @@
           const modelClone = loadedModel.clone();
           anchor.group.add(modelClone);
           
-          // ★ クローンしたモデルをアニメーション管理配列に追加
           animatedModels.push({
              mesh: modelClone,
-             speed: 0.01 + Math.random() * 0.01, // 回転速度を少しランダムに
-             offset: Math.random() * 100 // 浮遊のタイミングをずらす
+             speed: 0.02, // 回転スピード
+             offset: Math.random() * 100 
           });
         }
 
@@ -288,27 +300,24 @@
           }
         };
 
-        anchor.onTargetLost = () => {
-            // ロストしても音声は継続
-        };
+        anchor.onTargetLost = () => {};
       }
 
       await mindarThree.start();
       loadingScreen.style.display = "none"; 
 
-      // ★ ここで毎フレームのアニメーションを実行
+      // アニメーションループ
       renderer.setAnimationLoop(() => {
         const time = performance.now() / 1000; 
 
         animatedModels.forEach(item => {
             const model = item.mesh;
             
-            // 1. Y軸回転（くるくる）
+            // その場でくるくる回転
             model.rotation.y += item.speed; 
 
-            // 2. 上下浮遊（ふわふわ）
-            // position.yはモデルの「足元」が基準なので、上に少し上げておく
-            model.position.y = 0.05 + Math.sin(time * 2 + item.offset) * 0.03; // ベース位置0.05 + 浮遊幅0.03
+            // その場でふわふわ（中心補正をしたので綺麗に動くはず）
+            model.position.y = 0.05 + Math.sin(time * 2 + item.offset) * 0.02; 
         });
 
         renderer.render(scene, camera);

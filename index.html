@@ -90,8 +90,7 @@
       <span id="duration">--:--</span>
     </div>
   </div>
-
-  <script>
+<script>
     const startBtn = document.getElementById("start-btn");
     const loadingScreen = document.getElementById("loading-screen");
     const controls = document.getElementById("audio-controls");
@@ -107,11 +106,12 @@
     let activeAudio = null;
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-    // 3Dモデル読み込み用の設定
     const loader = new THREE.GLTFLoader();
-    let loadedModel = null; // 読み込んだモデルをここに保存
+    let loadedModel = null;
+    
+    // ★ アニメーションさせたいモデルを管理する配列
+    let animatedModels = []; 
 
-    // 時間フォーマット関数
     function formatTime(seconds) {
       if (isNaN(seconds) || !isFinite(seconds)) return "0:00";
       const m = Math.floor(seconds / 60);
@@ -119,7 +119,6 @@
       return `${m}:${s < 10 ? '0' : ''}${s}`;
     }
 
-    // 音声リスト読み込み
     fetch('assets/audio/list.json')
       .then(res => res.json())
       .then(list => {
@@ -130,7 +129,6 @@
           audio.playsInline = true;
           audioContainer.appendChild(audio);
 
-          // 時間更新処理
           const updateDuration = () => {
             if (activeAudio === audio && isFinite(audio.duration)) {
               durationLabel.innerText = formatTime(audio.duration);
@@ -139,7 +137,6 @@
           audio.addEventListener('loadedmetadata', updateDuration);
           audio.addEventListener('durationchange', updateDuration);
 
-          // 再生中の時間更新
           audio.addEventListener('timeupdate', () => {
             if (activeAudio === audio && isFinite(audio.duration)) {
               const value = (audio.currentTime / audio.duration) * 100;
@@ -148,7 +145,6 @@
             }
           });
 
-          // 再生終了時
           audio.addEventListener('ended', () => {
             playAudioBtn.innerText = "解説を再生";
             seekBar.value = 0;
@@ -160,54 +156,45 @@
       })
       .catch(err => console.error('JSON読み込みエラー:', err));
 
-    // ボタン制御
     playAudioBtn.addEventListener("click", () => {
       if (!activeAudio) return;
       if (activeAudio.paused) {
         activeAudio.play().catch(e => console.warn(e));
-        playAudioBtn.innerText = "一時停止";
+        playAudioBtn.innerText = "一時停止 ⏸";
       } else {
         activeAudio.pause();
-        playAudioBtn.innerText = "再開";
+        playAudioBtn.innerText = "再開 ▶";
       }
     });
 
-    // シークバー操作
     seekBar.addEventListener("input", () => {
       if (!activeAudio || !isFinite(activeAudio.duration)) return;
       const time = (seekBar.value / 100) * activeAudio.duration;
       activeAudio.currentTime = time;
     });
 
-    // AR起動処理
     startBtn.addEventListener("click", async () => {
       document.querySelector('main').style.display = "none";
       document.querySelector('footer').style.display = "none";
       loadingScreen.style.display = "flex"; 
       arContainer.style.display = "block";
 
-      // スマホ対策: 音声をロードしておく
       audios.forEach(a => a.load());
 
-      // ★ 3Dモデルの読み込み処理
-      await new Promise((resolve, reject) => {
+      await new Promise((resolve) => {
         loader.load(
-          'assets/models/meeple.glb', // ファイルパス
+          'assets/models/meeple.glb', 
           (gltf) => {
             loadedModel = gltf.scene;
-            // ここでモデルの基本サイズや向きを調整
-            // Fusionで作った場合、大きすぎることが多いので小さくする
-            loadedModel.scale.set(20, 20, 20); 
-            // 向きがおかしい（寝ている）場合はここを調整: rotation.x = Math.PI / 2 など
-            // loadedModel.rotation.x = Math.PI / 2; 
-            
+            loadedModel.scale.set(0.1, 0.1, 0.1); 
+            // loadedModel.rotation.x = Math.PI / 2; // 必要なら
             console.log("モデル読み込み完了");
             resolve();
           },
           undefined,
           (error) => {
-            console.error("モデル読み込みエラー", error);
-            resolve(); // エラーでもARは起動させる
+            console.error("モデルエラー", error);
+            resolve();
           }
         );
       });
@@ -219,35 +206,29 @@
 
       const { renderer, scene, camera } = mindarThree;
 
-      // ターゲットごとに設定
       for (let i = 0; i < audios.length; i++) {
         const anchor = mindarThree.addAnchor(i);
 
-        // ★ モデルを表示（アンカーに追加）
         if (loadedModel) {
-          // モデルを複製して追加（ターゲットが複数の場合のため）
           const modelClone = loadedModel.clone();
           anchor.group.add(modelClone);
           
-          // アニメーションがあれば再生（任意）
-          // const mixer = new THREE.AnimationMixer(modelClone);
-          // ...
+          // ★ クローンしたモデルをアニメーション管理配列に追加
+          animatedModels.push({
+             mesh: modelClone,
+             speed: 0.01 + Math.random() * 0.01, // 回転速度を少しランダムに
+             offset: Math.random() * 100 // 浮遊のタイミングをずらす
+          });
         }
 
-        // 認識時の処理（音声）
         anchor.onTargetFound = () => {
-          console.log(`パッケージ${i}認識`);
-
           if (currentAudioIndex === i) return;
-
           if (activeAudio) {
             activeAudio.pause();
             activeAudio.currentTime = 0;
           }
-
           currentAudioIndex = i;
           activeAudio = audios[i];
-
           controls.style.display = "block";
           seekBar.value = 0;
           currentTimeLabel.innerText = "0:00";
@@ -258,28 +239,44 @@
              durationLabel.innerText = "--:--";
              activeAudio.load();
           }
-
           if (isIOS) {
-            playAudioBtn.innerText = "解説を再生";
+            playAudioBtn.innerText = "解説を再生 ▶";
           } else {
             activeAudio.volume = 1.0;
             activeAudio.play().then(() => {
-                playAudioBtn.innerText = "一時停止";
+                playAudioBtn.innerText = "一時停止 ⏸";
             }).catch(e => {
-                playAudioBtn.innerText = "解説を再生";
+                playAudioBtn.innerText = "解説を再生 ▶";
             });
           }
         };
-
-        anchor.onTargetLost = () => {
-            // ロストしても音声は継続
-            // ※ 3DモデルはMindARの仕様で自動的に非表示になります
-        };
+        anchor.onTargetLost = () => {};
       }
 
       await mindarThree.start();
       loadingScreen.style.display = "none"; 
-      renderer.setAnimationLoop(() => { renderer.render(scene, camera); });
+
+      // ★ ここで毎フレームのアニメーションを実行
+      renderer.setAnimationLoop(() => {
+        
+        // 経過時間を取得（浮遊計算用）
+        const time = performance.now() / 1000; 
+
+        // 登録された全モデルを動かす
+        animatedModels.forEach(item => {
+            const model = item.mesh;
+            
+            // 1. Y軸回転（くるくる）
+            model.rotation.y += item.speed; 
+
+            // 2. 上下浮遊（ふわふわ）
+            // Math.sin(時間) を使うと -1〜1 の波ができる
+            // position.y = (ベース高さ) + Math.sin(時間 + ズレ) * 振れ幅
+            model.position.y = 0 + Math.sin(time * 2 + item.offset) * 0.05; 
+        });
+
+        renderer.render(scene, camera);
+      });
     });
   </script>
 </body>

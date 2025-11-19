@@ -91,8 +91,7 @@
       <span id="duration">--:--</span>
     </div>
   </div>
-
-  <script>
+<script>
     const startBtn = document.getElementById("start-btn");
     const loadingScreen = document.getElementById("loading-screen");
     const controls = document.getElementById("audio-controls");
@@ -181,45 +180,36 @@
 
       audios.forEach(a => a.load());
 
-      // ★ 3Dモデル読み込み処理
       await new Promise((resolve) => {
         loader.load(
           'assets/models/meeple.glb', 
           (gltf) => {
             const rawModel = gltf.scene;
 
-            // --- ぐらぐら＆中心補正 ---
+            // --- 中心補正 ---
             const box = new THREE.Box3().setFromObject(rawModel);
             const center = box.getCenter(new THREE.Vector3());
             const wrapper = new THREE.Group();
-            
-            // 中心座標をずらしてWrapperに入れる（これで軸が真ん中になる）
-            // Y軸は底面(min.y)を0に合わせて地面に立たせる
             rawModel.position.set(-center.x, -box.min.y, -center.z);
-            
             wrapper.add(rawModel);
             loadedModel = wrapper; 
 
-            // --- サイズ調整 ---
-            // ★ 前回は見えなくなったので、とりあえず5倍に設定します。
-            // まだ小さい場合は 20 など元の数値に戻してください。
-            loadedModel.scale.set(20, 20, 20); 
+            // サイズ設定
+            loadedModel.scale.set(5.0, 5.0, 5.0); 
 
-            // --- マテリアル（色・質感）設定 ---
-            const whiteMaterial = new THREE.MeshStandardMaterial({
-                color: 0xffffff,    // 白
-                emissive: 0x444444, // 少し発光させて黒つぶれ防止
-                roughness: 0.3,
-                metalness: 0.1
+            // ★★★ ここが変更点：最強の白設定 ★★★
+            // MeshBasicMaterial は光の影響を受けず、指定した色でそのまま表示されます
+            const basicWhiteMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff // 完全な白
             });
 
             rawModel.traverse((child) => {
                 if (child.isMesh) {
-                    child.material = whiteMaterial;
+                    child.material = basicWhiteMaterial;
                 }
             });
             
-            console.log("モデル読み込み完了");
+            console.log("モデル読み込み完了：BasicMaterial適用");
             resolve();
           },
           undefined,
@@ -237,27 +227,22 @@
 
       const { renderer, scene, camera } = mindarThree;
 
-      // --- 照明設定（しっかり明るく） ---
-      const ambientLight = new THREE.AmbientLight(0xffffff, 1.2); 
+      // BasicMaterialにしたのでライトは不要ですが、念のため残しておきます
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1.0); 
       scene.add(ambientLight);
 
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-      directionalLight.position.set(5, 10, 7); 
-      scene.add(directionalLight);
-
-      // ループ処理
       for (let i = 0; i < audios.length; i++) {
         const anchor = mindarThree.addAnchor(i);
 
-        // ★【変更点】ターゲット0番（最初の画像）の時だけモデルを表示
+        // ターゲット0番のみ表示
         if (i === 0 && loadedModel) {
           const modelClone = loadedModel.clone();
           anchor.group.add(modelClone);
           
           animatedModels.push({
              mesh: modelClone,
-             speed: 0.02, // 回転速度
-             offset: 0    // 浮遊タイミング
+             speed: 0.02,
+             offset: 0 
           });
         }
 
@@ -306,21 +291,20 @@
       renderer.setAnimationLoop(() => {
         const time = performance.now() / 1000; 
 
-        // アニメーション更新
         animatedModels.forEach(item => {
             const model = item.mesh;
             
-            // くるくる（Y軸回転）
+            // くるくる
             model.rotation.y += item.speed; 
 
-            // ふわふわ（上下移動）
-            // 中心補正のおかげで、軸がブレずに綺麗に回るはずです
-            model.position.y = 0.1 + Math.sin(time * 2 + item.offset) * 0.05; 
+            // ★★★ ここで高さを調整 ★★★
+            // 0.5 (基準の高さ) を 1.0 にすればもっと高くなります
+            model.position.y = 0.5 + Math.sin(time * 2 + item.offset) * 0.05; 
         });
 
         renderer.render(scene, camera);
       });
     });
-  </script>
+</script>
 </body>
 </html>

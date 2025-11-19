@@ -28,10 +28,11 @@ body, html {
   left: 0;
   width: 100%;
   height: 100%;
+  /* 画像パスを変更: ボードゲームが並んでいるような画像を想定 */
   background-image: url('assets/images/html/hero-bg.png');
   background-size: cover;
   background-position: center;
-  filter: brightness(0.5);
+  filter: brightness(0.5); /* 文字を読みやすくするため少し暗く */
   z-index: -1;
 }
 
@@ -43,7 +44,7 @@ body, html {
 }
 
 .hero-title {
-  font-size: clamp(2.0rem, 7vw, 4.0rem);
+  font-size: clamp(2.0rem, 7vw, 4.0rem); /* 少しサイズ調整 */
   margin-bottom: 20px;
   font-weight: bold;
   letter-spacing: 2px;
@@ -59,6 +60,7 @@ body, html {
 
 .start-button {
   display: inline-block;
+  /* ボードゲームらしさを出すため、楽しげなオレンジ色に変更（任意） */
   background-color: #e67e22; 
   color: white;
   padding: 20px 60px;
@@ -73,7 +75,7 @@ body, html {
 }
 
 .start-button:hover {
-  background-color: #d35400;
+  background-color: #d35400; /* ホバー時は少し濃く */
   transform: translateY(-3px);
 }
 
@@ -81,7 +83,7 @@ body, html {
 .feature-section {
   padding: 80px 20px;
   text-align: center;
-  background-color: #fffcf5;
+  background-color: #fffcf5; /* 少し温かみのあるオフホワイト */
 }
 
 .section-title {
@@ -111,7 +113,7 @@ body, html {
 }
 
 .feature-item img {
-  width: 150px;
+  width: 150px; /* アイコンサイズ調整 */
   height: 150px;
   object-fit: contain;
   margin-bottom: 20px;
@@ -120,7 +122,7 @@ body, html {
 .feature-item h3 {
   font-size: 1.5rem;
   margin-bottom: 15px;
-  color: #e67e22;
+  color: #e67e22; /* タイトルもテーマカラーに合わせる */
 }
 
 .feature-item p {
@@ -181,87 +183,24 @@ footer {
   font-size: 0.9rem;
 }
 
-/* AR表示エリア */
+/* AR関連の要素 */
 #ar-container {
   width: 100vw;
   height: 100vh;
   display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 900;
 }
-
-/* --- 以下、オーディオコントローラーのスタイル --- */
-#audio-controls {
-  display: none; /* 初期状態は非表示 */
-  position: fixed;
-  bottom: 30px;
+#play-audio-btn {
+  position: absolute;
+  bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1000;
-  background: rgba(255, 255, 255, 0.95); /* ガラスっぽい透過背景 */
-  padding: 20px;
-  border-radius: 20px;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-  width: 90%;
-  max-width: 400px;
-  text-align: center;
-  backdrop-filter: blur(5px);
-}
-
-#play-audio-btn {
-  padding: 10px 30px;
+  padding: 12px 24px;
   font-size: 16px;
-  font-weight: bold;
-  margin-bottom: 15px;
-  cursor: pointer;
-  background: #e67e22;
+  background: #27ae60; /* 再生ボタンは緑系のまま */
   color: white;
   border: none;
-  border-radius: 50px;
-  transition: background 0.2s;
-}
-
-#play-audio-btn:hover {
-  background: #d35400;
-}
-
-.seek-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  color: #333;
-}
-
-#current-time, #duration {
-  font-variant-numeric: tabular-nums; /* 数字の幅を揃える */
-  width: 40px;
-}
-
-#seek-bar {
-  flex-grow: 1;
-  cursor: pointer;
-  width: 100%;
-  height: 6px;
-  background: #ddd;
-  border-radius: 5px;
-  outline: none;
-  -webkit-appearance: none; /* デフォルトスタイル無効化 */
-}
-
-/* シークバーのつまみ部分 (Chrome/Safari) */
-#seek-bar::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 18px;
-  height: 18px;
-  background: #e67e22;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: transform 0.1s;
-}
-
-#seek-bar::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
+  border-radius: 8px;
+  display: none;
+  z-index: 100;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.2);
 }

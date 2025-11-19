@@ -74,41 +74,20 @@
     <p>&copy; 2025 Mottainai Games. All rights reserved.</p>
   </footer>
 
+  <button id="play-audio-btn">解説を再生</button>
   <div id="ar-container"></div>
-  
   <div id="audio-container" style="display:none"></div>
 
-  <div id="audio-controls">
-    <button id="play-audio-btn">解説を再生</button>
-    <div class="seek-wrapper">
-      <span id="current-time">0:00</span>
-      <input type="range" id="seek-bar" value="0" max="100">
-      <span id="duration">0:00</span>
-    </div>
-  </div>
-
   <script>
+    // 機能ロジックは変更なし
     const startBtn = document.getElementById("start-btn");
-    const controls = document.getElementById("audio-controls");
     const playAudioBtn = document.getElementById("play-audio-btn");
-    const seekBar = document.getElementById("seek-bar");
-    const currentTimeLabel = document.getElementById("current-time");
-    const durationLabel = document.getElementById("duration");
     const arContainer = document.getElementById("ar-container");
     const audioContainer = document.getElementById("audio-container");
 
     let audios = [];
     let currentAudioIndex = null;
-    let activeAudio = null;
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-    // 時間を「分:秒」形式に変換する関数
-    function formatTime(seconds) {
-      if (isNaN(seconds)) return "0:00";
-      const m = Math.floor(seconds / 60);
-      const s = Math.floor(seconds % 60);
-      return `${m}:${s < 10 ? '0' : ''}${s}`;
-    }
 
     // 音声リストの読み込み
     fetch('assets/audio/list.json')
@@ -120,57 +99,24 @@
           audio.preload = 'auto';
           audio.playsInline = true;
           audioContainer.appendChild(audio);
-
-          // 音声の長さ（Duration）が判明した時
-          audio.addEventListener('loadedmetadata', () => {
-            if (activeAudio === audio) {
-              durationLabel.innerText = formatTime(audio.duration);
-            }
-          });
-
-          // 再生位置が進んだ時（シークバー更新）
-          audio.addEventListener('timeupdate', () => {
-            if (activeAudio === audio) {
-              const value = (audio.currentTime / audio.duration) * 100;
-              seekBar.value = isNaN(value) ? 0 : value;
-              currentTimeLabel.innerText = formatTime(audio.currentTime);
-            }
-          });
-
-          // 再生終了時
-          audio.addEventListener('ended', () => {
-            playAudioBtn.innerText = "解説を再生";
-            seekBar.value = 0;
-            currentTimeLabel.innerText = "0:00";
-          });
-
           return audio;
         });
       })
       .catch(err => console.error('JSON読み込みエラー:', err));
 
-    // ボタン制御：再生/一時停止のトグル
     playAudioBtn.addEventListener("click", () => {
-      if (!activeAudio) return;
-
-      if (activeAudio.paused) {
-        activeAudio.play().then(() => {
-            playAudioBtn.innerText = "一時停止";
-        }).catch(e => console.warn('再生エラー', e));
-      } else {
-        activeAudio.pause();
-        playAudioBtn.innerText = "再開";
+      if (currentAudioIndex !== null) {
+        audios.forEach((a, idx) => {
+          if (idx !== currentAudioIndex) {
+            a.pause(); a.currentTime = 0;
+          }
+        });
+        const audio = audios[currentAudioIndex];
+        audio.pause(); audio.currentTime = 0; audio.volume = 1.0;
+        audio.play().catch(e => console.warn('再生失敗', e));
       }
     });
 
-    // シークバー操作：ドラッグして位置変更
-    seekBar.addEventListener("input", () => {
-      if (!activeAudio) return;
-      const time = (seekBar.value / 100) * activeAudio.duration;
-      activeAudio.currentTime = time;
-    });
-
-    // AR開始処理
     startBtn.addEventListener("click", async () => {
       document.querySelector('main').style.display = "none";
       document.querySelector('footer').style.display = "none";
@@ -178,7 +124,7 @@
 
       const mindarThree = new window.MINDAR.IMAGE.MindARThree({
         container: arContainer,
-        imageTargetSrc: "./targets.mind" 
+        imageTargetSrc: "./targets.mind" // ここをボードゲーム用のmindファイルにする必要があります
       });
 
       const { renderer, scene, camera } = mindarThree;
@@ -186,48 +132,29 @@
       for (let i = 0; i < audios.length; i++) {
         const anchor = mindarThree.addAnchor(i);
 
-        // ターゲット認識時
         anchor.onTargetFound = () => {
-          console.log(`パッケージ${i}認識`);
-
-          // 既にこの音声を認識・再生中ならリセットしない
-          if (currentAudioIndex === i) return;
-
-          // 別の音声が再生中なら停止・リセット
-          if (activeAudio) {
-            activeAudio.pause();
-            activeAudio.currentTime = 0;
-          }
-
-          // 新しいターゲットに切り替え
+          console.log(`パッケージ${i}認識`); // ログ文言変更
           currentAudioIndex = i;
-          activeAudio = audios[i];
 
-          // コントローラー表示・初期化
-          controls.style.display = "block";
-          seekBar.value = 0;
-          currentTimeLabel.innerText = "0:00";
-          durationLabel.innerText = formatTime(activeAudio.duration);
-
-          // 再生処理
           if (isIOS) {
-            // iOSはユーザーアクションが必要なのでボタンは「解説を再生」にする
-            playAudioBtn.innerText = "解説を再生";
+            playAudioBtn.style.display = "block";
+            playAudioBtn.innerText = "解説を再生"; // ボタン文言変更
           } else {
-            // Android/PCは自動再生を試みる
-            activeAudio.volume = 1.0;
-            activeAudio.play().then(() => {
-              playAudioBtn.innerText = "一時停止";
-            }).catch(e => {
-              console.warn('自動再生失敗', e);
-              playAudioBtn.innerText = "解説を再生";
+            audios.forEach((a, idx) => {
+              if (idx !== i) { a.pause(); a.currentTime = 0; }
             });
+            const audio = audios[i];
+            audio.pause(); audio.currentTime = 0; audio.volume = 1.0;
+            audio.play().catch(e => console.warn('自動再生失敗', e));
           }
         };
 
-        // ターゲットロスト時（何もしない＝音声とコントローラー継続）
         anchor.onTargetLost = () => {
-            console.log(`パッケージ${i}ロスト（継続）`);
+          if (currentAudioIndex === i) {
+            audios[i].pause(); audios[i].currentTime = 0;
+            playAudioBtn.style.display = "none";
+            currentAudioIndex = null;
+          }
         };
       }
 

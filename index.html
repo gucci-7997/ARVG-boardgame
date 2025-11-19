@@ -6,8 +6,10 @@
   <title>ボードゲームARガイド</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  
   <script src="https://cdn.jsdelivr.net/npm/three@0.136.0/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-three.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.136.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 <body>
 
@@ -16,11 +18,10 @@
       <div class="hero-background"></div>
       <div class="hero-content">
         <h1 class="hero-title"><br>ボードゲームARガイド</h1>
-        <p class="hero-subtitle">ルールブックを開くその前に。<br>パッケージにスマホをかざすだけで、ゲームの概要やルールを音声で解説します。</p>
+        <p class="hero-subtitle">ルールブックを開くその前に。<br>パッケージにスマホをかざすだけで、3Dモデルと音声解説がスタートします。</p>
         <button id="start-btn" class="start-button">ARガイドを起動</button>
       </div>
     </section>
-
     <section class="feature-section">
       <h2 class="section-title">このシステムの特徴</h2>
       <div class="features-grid">
@@ -68,27 +69,31 @@
         </div>
       </div>
     </section>
-  </main>
-
-  <footer>
+  </main> <footer>
     <p>&copy; 2025 Mottainai Games. All rights reserved.</p>
   </footer>
+    
+    </main>
+
+  <div id="loading-screen" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; z-index: 9999; flex-direction: column; justify-content: center; align-items: center;">
+    <p>データを読み込み中...</p>
+  </div>
 
   <div id="ar-container"></div>
-  
   <div id="audio-container" style="display:none"></div>
 
   <div id="audio-controls">
-    <button id="play-audio-btn">再生</button>
+    <button id="play-audio-btn">解説を再生</button>
     <div class="seek-wrapper">
       <span id="current-time">0:00</span>
       <input type="range" id="seek-bar" value="0" max="100">
-      <span id="duration">0:00</span>
+      <span id="duration">--:--</span>
     </div>
   </div>
 
   <script>
     const startBtn = document.getElementById("start-btn");
+    const loadingScreen = document.getElementById("loading-screen");
     const controls = document.getElementById("audio-controls");
     const playAudioBtn = document.getElementById("play-audio-btn");
     const seekBar = document.getElementById("seek-bar");
@@ -102,15 +107,19 @@
     let activeAudio = null;
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-    // 時間を「分:秒」形式に変換する関数
+    // 3Dモデル読み込み用の設定
+    const loader = new THREE.GLTFLoader();
+    let loadedModel = null; // 読み込んだモデルをここに保存
+
+    // 時間フォーマット関数
     function formatTime(seconds) {
-      if (isNaN(seconds)) return "0:00";
+      if (isNaN(seconds) || !isFinite(seconds)) return "0:00";
       const m = Math.floor(seconds / 60);
       const s = Math.floor(seconds % 60);
       return `${m}:${s < 10 ? '0' : ''}${s}`;
     }
 
-    // 音声リストの読み込み
+    // 音声リスト読み込み
     fetch('assets/audio/list.json')
       .then(res => res.json())
       .then(list => {
@@ -121,16 +130,18 @@
           audio.playsInline = true;
           audioContainer.appendChild(audio);
 
-          // 音声の長さ（Duration）が判明した時
-          audio.addEventListener('loadedmetadata', () => {
-            if (activeAudio === audio) {
+          // 時間更新処理
+          const updateDuration = () => {
+            if (activeAudio === audio && isFinite(audio.duration)) {
               durationLabel.innerText = formatTime(audio.duration);
             }
-          });
+          };
+          audio.addEventListener('loadedmetadata', updateDuration);
+          audio.addEventListener('durationchange', updateDuration);
 
-          // 再生位置が進んだ時（シークバー更新）
+          // 再生中の時間更新
           audio.addEventListener('timeupdate', () => {
-            if (activeAudio === audio) {
+            if (activeAudio === audio && isFinite(audio.duration)) {
               const value = (audio.currentTime / audio.duration) * 100;
               seekBar.value = isNaN(value) ? 0 : value;
               currentTimeLabel.innerText = formatTime(audio.currentTime);
@@ -149,32 +160,57 @@
       })
       .catch(err => console.error('JSON読み込みエラー:', err));
 
-    // ボタン制御：再生/一時停止のトグル
+    // ボタン制御
     playAudioBtn.addEventListener("click", () => {
       if (!activeAudio) return;
-
       if (activeAudio.paused) {
-        activeAudio.play().then(() => {
-            playAudioBtn.innerText = "一時停止";
-        }).catch(e => console.warn('再生エラー', e));
+        activeAudio.play().catch(e => console.warn(e));
+        playAudioBtn.innerText = "一時停止";
       } else {
         activeAudio.pause();
         playAudioBtn.innerText = "再開";
       }
     });
 
-    // シークバー操作：ドラッグして位置変更
+    // シークバー操作
     seekBar.addEventListener("input", () => {
-      if (!activeAudio) return;
+      if (!activeAudio || !isFinite(activeAudio.duration)) return;
       const time = (seekBar.value / 100) * activeAudio.duration;
       activeAudio.currentTime = time;
     });
 
-    // AR開始処理
+    // AR起動処理
     startBtn.addEventListener("click", async () => {
       document.querySelector('main').style.display = "none";
       document.querySelector('footer').style.display = "none";
+      loadingScreen.style.display = "flex"; 
       arContainer.style.display = "block";
+
+      // スマホ対策: 音声をロードしておく
+      audios.forEach(a => a.load());
+
+      // ★ 3Dモデルの読み込み処理
+      await new Promise((resolve, reject) => {
+        loader.load(
+          'assets/models/meeple.glb', // ファイルパス
+          (gltf) => {
+            loadedModel = gltf.scene;
+            // ここでモデルの基本サイズや向きを調整
+            // Fusionで作った場合、大きすぎることが多いので小さくする
+            loadedModel.scale.set(0.1, 0.1, 0.1); 
+            // 向きがおかしい（寝ている）場合はここを調整: rotation.x = Math.PI / 2 など
+            // loadedModel.rotation.x = Math.PI / 2; 
+            
+            console.log("モデル読み込み完了");
+            resolve();
+          },
+          undefined,
+          (error) => {
+            console.error("モデル読み込みエラー", error);
+            resolve(); // エラーでもARは起動させる
+          }
+        );
+      });
 
       const mindarThree = new window.MINDAR.IMAGE.MindARThree({
         container: arContainer,
@@ -183,55 +219,66 @@
 
       const { renderer, scene, camera } = mindarThree;
 
+      // ターゲットごとに設定
       for (let i = 0; i < audios.length; i++) {
         const anchor = mindarThree.addAnchor(i);
 
-        // ターゲット認識時
+        // ★ モデルを表示（アンカーに追加）
+        if (loadedModel) {
+          // モデルを複製して追加（ターゲットが複数の場合のため）
+          const modelClone = loadedModel.clone();
+          anchor.group.add(modelClone);
+          
+          // アニメーションがあれば再生（任意）
+          // const mixer = new THREE.AnimationMixer(modelClone);
+          // ...
+        }
+
+        // 認識時の処理（音声）
         anchor.onTargetFound = () => {
           console.log(`パッケージ${i}認識`);
 
-          // 既にこの音声を認識・再生中ならリセットしない
           if (currentAudioIndex === i) return;
 
-          // 別の音声が再生中なら停止・リセット
           if (activeAudio) {
             activeAudio.pause();
             activeAudio.currentTime = 0;
           }
 
-          // 新しいターゲットに切り替え
           currentAudioIndex = i;
           activeAudio = audios[i];
 
-          // コントローラー表示・初期化
           controls.style.display = "block";
           seekBar.value = 0;
           currentTimeLabel.innerText = "0:00";
-          durationLabel.innerText = formatTime(activeAudio.duration);
+          
+          if (activeAudio.readyState >= 1 && isFinite(activeAudio.duration)) {
+             durationLabel.innerText = formatTime(activeAudio.duration);
+          } else {
+             durationLabel.innerText = "--:--";
+             activeAudio.load();
+          }
 
-          // 再生処理
           if (isIOS) {
-            // iOSはユーザーアクションが必要なのでボタンは「解説を再生」にする
             playAudioBtn.innerText = "解説を再生";
           } else {
-            // Android/PCは自動再生を試みる
             activeAudio.volume = 1.0;
             activeAudio.play().then(() => {
-              playAudioBtn.innerText = "一時停止";
+                playAudioBtn.innerText = "一時停止";
             }).catch(e => {
-              console.warn('自動再生失敗', e);
-              playAudioBtn.innerText = "解説を再生";
+                playAudioBtn.innerText = "解説を再生";
             });
           }
         };
 
-        // ターゲットロスト時（何もしない＝音声とコントローラー継続）
         anchor.onTargetLost = () => {
-            console.log(`パッケージ${i}ロスト（継続）`);
+            // ロストしても音声は継続
+            // ※ 3DモデルはMindARの仕様で自動的に非表示になります
         };
       }
 
       await mindarThree.start();
+      loadingScreen.style.display = "none"; 
       renderer.setAnimationLoop(() => { renderer.render(scene, camera); });
     });
   </script>

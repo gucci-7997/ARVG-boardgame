@@ -172,7 +172,7 @@
             rawModel.position.set(-center.x, -box.min.y, -center.z);
             wrapper.add(rawModel);
             loadedModel = wrapper; 
-            loadedModel.scale.set(5.0, 5.0, 5.0); 
+            loadedModel.scale.set(25, 25, 25); 
             
             const basicWhiteMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
             rawModel.traverse((child) => {
@@ -189,11 +189,9 @@
       cardGroup = new THREE.Group();
       const cardGeometry = new THREE.PlaneGeometry(0.5, 0.7); // カードサイズ
 
-      // ★ 画像ファイルの読み込み（ここを修正しました）
-      // 画像パスが違う場合はここを書き換えてください
-      const texture1 = textureLoader.load('assets/images/cards/card1.png');
-      const texture2 = textureLoader.load('assets/images/cards/card2.png');
-      const texture3 = textureLoader.load('assets/images/cards/card3.png');
+      const texture1 = textureLoader.load('assets/images/contents/card1.png');
+      const texture2 = textureLoader.load('assets/images/contents/card2.png');
+      const texture3 = textureLoader.load('assets/images/contents/card3.png');
 
       const material1 = new THREE.MeshBasicMaterial({ map: texture1, side: THREE.DoubleSide });
       const material2 = new THREE.MeshBasicMaterial({ map: texture2, side: THREE.DoubleSide });

@@ -317,18 +317,3 @@
   </script>
 </body>
 </html>
-```http://googleusercontent.com/image_generation_content/1
-
-
-### 変更点まとめ
-
-1.  **HTML構造の修正**
-    * `<main>` タグが二重になっていた部分を修正し、`<footer>` が `<main>` の外側で閉じるようにしました。これでサイト全体のレイアウトが正しく表示されます。
-2.  **3Dモデルへの白色マテリアル適用**
-    * `loadedModel.traverse` を使って、読み込んだモデルのすべてのメッシュに `THREE.MeshStandardMaterial` で白色を設定しました。
-    * `roughness` (粗さ) や `metalness` (金属感) を調整することで、質感を変更できます。
-    * **ライトと影**: よりリアルな見た目にするため、シーンに環境光 (`HemisphereLight`) と指向性ライト (`DirectionalLight`) を追加し、影 (`shadowMap.enabled = true`) を有効にしました。これにより、白色のモデルでも立体感がしっかり出ます。
-3.  **アニメーション（回転と浮遊）**
-    * `animatedModels` 配列に、各アンカーにクローンされたモデルと、アニメーション用の設定（`speed`, `offset`）を保存します。
-    * `renderer.setAnimationLoop` の中で、`performance.now()` を使って現在の時間を取得し、それに基づいて各モデルの `rotation.y`（Y軸回転）と `position.y`（Y軸方向の上下浮遊）を変化させています。
-    * `model.position.y = 0.05 + Math.sin(time * 2 + item.offset) * 0.03;` の部分で、モデルの足元を少し持ち上げて（`0.05`）、その上で `Math.sin` を使ってふわふわと

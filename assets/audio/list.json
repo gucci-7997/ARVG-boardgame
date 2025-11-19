@@ -1,7 +1,7 @@
 [
   {
     "target": 0,
-    "file": "instructions-front.wav"
+    "file": "package-front.wav"
   },
   {
     "target": 1,
@@ -9,6 +9,6 @@
   },
   {
     "target": 2,
-    "file": "package-front.wav"
+    "file": "instructions-front.wav"
   }
 ]

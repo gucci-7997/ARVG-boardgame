@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AR音声ナビゲーション</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/three@0.136.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-three.prod.js"></script>
+</head>
+<body>
+
+  <main>
+    <section class="hero-section">
+      <div class="hero-background"></div>
+      <div class="hero-content">
+        <h1 class="hero-title">空間が語りだす。<br>AR音声ナビゲーション</h1>
+        <p class="hero-subtitle">スマートフォンをかざすだけ。<br>事前に登録された場所やモノの情報を、的確な音声でご案内します。</p>
+        <button id="start-btn" class="start-button">ARを開始する</button>
+      </div>
+    </section>
+
+    <section class="feature-section">
+      <h2 class="section-title">このシステムの主な特徴</h2>
+      <div class="features-grid">
+        <div class="feature-item">
+          <img src="assets/images/html/icon-recognition.png" alt="画像認識アイコン">
+          <h3>高精度な空間・画像認識</h3>
+          <p>事前に学習させた特定の画像や空間を、スマートフォンが正確に認識。対象に紐づけられた専用の音声ガイドを再生します。</p>
+        </div>
+        <div class="feature-item">
+          <img src="assets/images/html/icon-audio.png" alt="音声コンテンツアイコン">
+          <h3>柔軟なコンテンツ登録</h3>
+          <p>場所やモノごとに、再生したい独自の音声ファイルを自由に設定可能。多言語対応や専門的な解説など、目的に合わせた案内を実現します。</p>
+        </div>
+        <div class="feature-item">
+          <img src="assets/images/html/icon-easy.png" alt="簡単操作アイコン">
+          <h3>シームレスな音声体験</h3>
+          <p>利用者は対象にかざすだけ。複雑な操作なしで、必要な情報を必要な場所で瞬時に音声で受け取ることができます。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="usage-section">
+      <h2 class="section-title">想定される利用シーン</h2>
+      <div class="usage-grid">
+        <div class="usage-card">
+          <img src="assets/images/html/usage-museum.png" alt="美術館">
+          <div class="usage-card-content">
+            <h3>美術館・博物館</h3>
+            <p>事前に登録した展示作品にカメラをかざすと、作者の意図や制作秘話など、作品ごとの詳細な解説を再生します。</p>
+          </div>
+        </div>
+        <div class="usage-card">
+          <img src="assets/images/html/usage-tourism.png" alt="観光地">
+          <div class="usage-card-content">
+            <h3>観光地・史跡</h3>
+            <p>特定の建造物や看板を認識させ、その場限定の歴史的背景や、通常は聞けない詳細な解説を音声で提供します。</p>
+          </div>
+        </div>
+        <div class="usage-card">
+          <img src="assets/images/html/usage-city.png" alt="施設・工場">
+          <div class="usage-card-content">
+            <h3>施設・イベント会場</h3>
+            <p>特定のエリア（空間）に入ると、その場所に関連する案内や誘導音声を自動で再生。工場見学やイベントでの活用に最適です。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2025 IoE/M2Mソリューション研究室. All rights reserved.</p>
+  </footer>
+
+  <button id="play-audio-btn">音声を再生</button>
+  <div id="ar-container"></div>
+  <div id="audio-container" style="display:none"></div>
+
+  <script>
+    // 既存のARスクリプトはここに配置
+    const startBtn = document.getElementById("start-btn");
+    const playAudioBtn = document.getElementById("play-audio-btn");
+    const arContainer = document.getElementById("ar-container");
+    const audioContainer = document.getElementById("audio-container");
+
+    let audios = [];
+    let currentAudioIndex = null;
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    fetch('assets/audio/list.json')
+      .then(res => res.json())
+      .then(list => {
+        audios = list.map(item => {
+          const audio = document.createElement('audio');
+          audio.src = `assets/audio/${item.file}`;
+          audio.preload = 'auto';
+          audio.playsInline = true;
+          audioContainer.appendChild(audio);
+          return audio;
+        });
+      })
+      .catch(err => console.error('JSON読み込みエラー:', err));
+
+    playAudioBtn.addEventListener("click", () => {
+      if (currentAudioIndex !== null) {
+        audios.forEach((a, idx) => {
+          if (idx !== currentAudioIndex) {
+            a.pause(); a.currentTime = 0;
+          }
+        });
+        const audio = audios[currentAudioIndex];
+        audio.pause(); audio.currentTime = 0; audio.volume = 1.0;
+        audio.play().catch(e => console.warn('再生失敗', e));
+      }
+    });
+
+    startBtn.addEventListener("click", async () => {
+      // メインコンテンツを非表示にし、ARコンテナを表示
+      document.querySelector('main').style.display = "none";
+      document.querySelector('footer').style.display = "none";
+      arContainer.style.display = "block";
+
+      const mindarThree = new window.MINDAR.IMAGE.MindARThree({
+        container: arContainer,
+        imageTargetSrc: "./targets.mind"
+      });
+
+      const { renderer, scene, camera } = mindarThree;
+
+      for (let i = 0; i < audios.length; i++) {
+        const anchor = mindarThree.addAnchor(i);
+
+        anchor.onTargetFound = () => {
+          console.log(`ターゲット${i}発見`);
+          currentAudioIndex = i;
+
+          if (isIOS) {
+            playAudioBtn.style.display = "block";
+          } else {
+            audios.forEach((a, idx) => {
+              if (idx !== i) { a.pause(); a.currentTime = 0; }
+            });
+            const audio = audios[i];
+            audio.pause(); audio.currentTime = 0; audio.volume = 1.0;
+            audio.play().catch(e => console.warn('自動再生失敗', e));
+          }
+        };
+
+        anchor.onTargetLost = () => {
+          if (currentAudioIndex === i) {
+            audios[i].pause(); audios[i].currentTime = 0;
+            playAudioBtn.style.display = "none";
+            currentAudioIndex = null;
+          }
+        };
+      }
+
+      await mindarThree.start();
+      renderer.setAnimationLoop(() => { renderer.render(scene, camera); });
+    });
+  </script>
+</body>
+</html>

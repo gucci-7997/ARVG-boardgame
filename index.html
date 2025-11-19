@@ -74,15 +74,12 @@
     <p>&copy; 2025 Mottainai Games. All rights reserved.</p>
   </footer>
 
-  <div id="loading-screen" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; z-index: 9999; flex-direction: column; justify-content: center; align-items: center;">
-    <p>システム起動中...</p>
-  </div>
-
   <div id="ar-container"></div>
+  
   <div id="audio-container" style="display:none"></div>
 
   <div id="audio-controls">
-    <button id="play-audio-btn">解説を再生</button>
+    <button id="play-audio-btn">再生</button>
     <div class="seek-wrapper">
       <span id="current-time">0:00</span>
       <input type="range" id="seek-bar" value="0" max="100">
@@ -92,7 +89,6 @@
 
   <script>
     const startBtn = document.getElementById("start-btn");
-    const loadingScreen = document.getElementById("loading-screen");
     const controls = document.getElementById("audio-controls");
     const playAudioBtn = document.getElementById("play-audio-btn");
     const seekBar = document.getElementById("seek-bar");
@@ -108,23 +104,10 @@
 
     // 時間を「分:秒」形式に変換する関数
     function formatTime(seconds) {
-      if (isNaN(seconds) || !isFinite(seconds)) return "0:00";
+      if (isNaN(seconds)) return "0:00";
       const m = Math.floor(seconds / 60);
       const s = Math.floor(seconds % 60);
       return `${m}:${s < 10 ? '0' : ''}${s}`;
-    }
-
-    // 【修正1】音声の準備が整うのを待つ関数
-    function setupAudio(audio) {
-        return new Promise((resolve) => {
-            // 既に読み込み終わっていたら即完了
-            if (audio.readyState >= 1) {
-                resolve();
-            } else {
-                // まだなら読み込み完了イベントを待つ
-                audio.addEventListener('loadedmetadata', () => resolve(), { once: true });
-            }
-        });
     }
 
     // 音声リストの読み込み
@@ -134,13 +117,20 @@
         audios = list.map(item => {
           const audio = document.createElement('audio');
           audio.src = `assets/audio/${item.file}`;
-          audio.preload = 'metadata'; // 修正: 最初はメタデータのみ読み込む設定に変更
+          audio.preload = 'auto';
           audio.playsInline = true;
           audioContainer.appendChild(audio);
 
-          // UI更新イベント
+          // 音声の長さ（Duration）が判明した時
+          audio.addEventListener('loadedmetadata', () => {
+            if (activeAudio === audio) {
+              durationLabel.innerText = formatTime(audio.duration);
+            }
+          });
+
+          // 再生位置が進んだ時（シークバー更新）
           audio.addEventListener('timeupdate', () => {
-            if (activeAudio === audio && isFinite(audio.duration)) {
+            if (activeAudio === audio) {
               const value = (audio.currentTime / audio.duration) * 100;
               seekBar.value = isNaN(value) ? 0 : value;
               currentTimeLabel.innerText = formatTime(audio.currentTime);
@@ -159,7 +149,7 @@
       })
       .catch(err => console.error('JSON読み込みエラー:', err));
 
-    // ボタン制御
+    // ボタン制御：再生/一時停止のトグル
     playAudioBtn.addEventListener("click", () => {
       if (!activeAudio) return;
 
@@ -173,9 +163,9 @@
       }
     });
 
-    // シークバー操作
+    // シークバー操作：ドラッグして位置変更
     seekBar.addEventListener("input", () => {
-      if (!activeAudio || !isFinite(activeAudio.duration)) return;
+      if (!activeAudio) return;
       const time = (seekBar.value / 100) * activeAudio.duration;
       activeAudio.currentTime = time;
     });
@@ -184,7 +174,6 @@
     startBtn.addEventListener("click", async () => {
       document.querySelector('main').style.display = "none";
       document.querySelector('footer').style.display = "none";
-      loadingScreen.style.display = "flex"; // 【修正2】ローディング表示開始
       arContainer.style.display = "block";
 
       const mindarThree = new window.MINDAR.IMAGE.MindARThree({
@@ -198,34 +187,34 @@
         const anchor = mindarThree.addAnchor(i);
 
         // ターゲット認識時
-        anchor.onTargetFound = async () => { // asyncを追加
+        anchor.onTargetFound = () => {
           console.log(`パッケージ${i}認識`);
 
+          // 既にこの音声を認識・再生中ならリセットしない
           if (currentAudioIndex === i) return;
 
+          // 別の音声が再生中なら停止・リセット
           if (activeAudio) {
             activeAudio.pause();
             activeAudio.currentTime = 0;
           }
 
+          // 新しいターゲットに切り替え
           currentAudioIndex = i;
           activeAudio = audios[i];
 
+          // コントローラー表示・初期化
           controls.style.display = "block";
           seekBar.value = 0;
           currentTimeLabel.innerText = "0:00";
-          durationLabel.innerText = "..."; // 読み込み中表示
-
-          // 【修正3】ここで音声情報の読み込み完了を確実に待つ
-          await setupAudio(activeAudio);
-
-          // 読み込み後に正しい時間を表示
           durationLabel.innerText = formatTime(activeAudio.duration);
 
           // 再生処理
           if (isIOS) {
+            // iOSはユーザーアクションが必要なのでボタンは「解説を再生」にする
             playAudioBtn.innerText = "解説を再生";
           } else {
+            // Android/PCは自動再生を試みる
             activeAudio.volume = 1.0;
             activeAudio.play().then(() => {
               playAudioBtn.innerText = "一時停止";
@@ -236,14 +225,13 @@
           }
         };
 
-        // ターゲットロスト時（何もしない）
+        // ターゲットロスト時（何もしない＝音声とコントローラー継続）
         anchor.onTargetLost = () => {
             console.log(`パッケージ${i}ロスト（継続）`);
         };
       }
 
       await mindarThree.start();
-      loadingScreen.style.display = "none"; // 【修正4】AR起動完了後にローディングを消す
       renderer.setAnimationLoop(() => { renderer.render(scene, camera); });
     });
   </script>

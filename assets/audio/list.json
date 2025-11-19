@@ -1,14 +1,14 @@
 [
   {
     "target": 0,
-    "file": "パッケージ表.wav"
+    "file": "instructions-front.wav"
   },
   {
     "target": 1,
-    "file": "パッケージ裏.wav"
+    "file": "package-back.wav"
   },
   {
     "target": 2,
-    "file": "説明書表.wav"
+    "file": "package-front.wav"
   }
 ]

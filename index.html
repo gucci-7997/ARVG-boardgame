@@ -188,32 +188,46 @@
       // 2. カードグループの作成
       cardGroup = new THREE.Group();
       const cardGeometry = new THREE.PlaneGeometry(0.5, 0.7); // カードサイズ
+      const ruleGeometry = new THREE.PlaneGeometry(1.5, 2.1); // ★カードより大きく
 
       const texture1 = textureLoader.load('assets/images/contents/card1.png');
       const texture2 = textureLoader.load('assets/images/contents/card2.png');
       const texture3 = textureLoader.load('assets/images/contents/card3.png');
+      const textureRule = textureLoader.load('assets/images/contents/rulebook.png');
 
       const material1 = new THREE.MeshBasicMaterial({ map: texture1, side: THREE.DoubleSide });
       const material2 = new THREE.MeshBasicMaterial({ map: texture2, side: THREE.DoubleSide });
       const material3 = new THREE.MeshBasicMaterial({ map: texture3, side: THREE.DoubleSide });
+      const materialRule = new THREE.MeshBasicMaterial({ map: textureRule, side: THREE.DoubleSide });
+      
 
       const card1 = new THREE.Mesh(cardGeometry, material1);
       const card2 = new THREE.Mesh(cardGeometry, material2);
       const card3 = new THREE.Mesh(cardGeometry, material3);
+      const rulebook = new THREE.Mesh(ruleGeometry, materialRule);
+// カード全体を少し左に寄せる
+      const cardOffsetX = -0.4;
+      const cardHeightY = 0.9; // ★高さを上げました
 
-      // 配置（左、真ん中、右）
-      card1.position.set(-0.6, 0.4, 0.1); 
+      // 左
+      card1.position.set(cardOffsetX - 0.5, cardHeightY - 0.1, 0.1); 
       card1.rotation.z = 0.2; 
 
-      card2.position.set(0, 0.5, 0); 
+      // 真ん中
+      card2.position.set(cardOffsetX, cardHeightY, 0); 
       
-      card3.position.set(0.6, 0.4, 0.1); 
+      // 右
+      card3.position.set(cardOffsetX + 0.5, cardHeightY - 0.1, 0.1); 
       card3.rotation.z = -0.2; 
+
+      // ★説明書（右側に配置）
+      rulebook.position.set(0.8, cardHeightY, 0.1); // X:0.8で右側へ、Yはカードと同じくらい
+      rulebook.rotation.z = -0.05; // 少しだけ傾けて自然に
 
       cardGroup.add(card1);
       cardGroup.add(card2);
       cardGroup.add(card3);
-
+      cardGroup.add(rulebook);
       cardGroup.visible = false;
 
       const mindarThree = new window.MINDAR.IMAGE.MindARThree({
@@ -303,7 +317,7 @@
         animatedModels.forEach(item => {
             if (item.mesh.visible) {
                 item.mesh.rotation.y += item.speed; 
-                item.mesh.position.y = 0.5 + Math.sin(time * 2 + item.offset) * 0.05; 
+                item.mesh.position.y = 0.7 + Math.sin(time * 2 + item.offset) * 0.05; 
             }
         });
 

@@ -181,48 +181,45 @@
 
       audios.forEach(a => a.load());
 
-      // ★ 3Dモデルの読み込み処理（修正版）
+      // ★ 3Dモデル読み込み処理
       await new Promise((resolve) => {
         loader.load(
           'assets/models/meeple.glb', 
           (gltf) => {
             const rawModel = gltf.scene;
 
-            // --- ぐらぐら修正（中心座標の補正） ---
-            // 1. モデルの大きさを測る箱（BoundingBox）を作る
+            // --- ぐらぐら＆中心補正 ---
             const box = new THREE.Box3().setFromObject(rawModel);
             const center = box.getCenter(new THREE.Vector3());
-            
-            // 2. 「ピボット（中心点）」代わりの空のグループを作る
             const wrapper = new THREE.Group();
             
-            // 3. モデルを、中心が(0,0,0)に来るようにズラしてグループに入れる
-            // ※ Y軸（高さ）は、物体の底面(min.y)が0に来るようにして、箱の上に立つようにする
+            // 中心座標をずらしてWrapperに入れる（これで軸が真ん中になる）
+            // Y軸は底面(min.y)を0に合わせて地面に立たせる
             rawModel.position.set(-center.x, -box.min.y, -center.z);
             
             wrapper.add(rawModel);
-            loadedModel = wrapper; // このグループを「モデル」として扱う
+            loadedModel = wrapper; 
 
-            // サイズ調整（グループ全体にかける）
-            // ※ Fusionモデルは巨大なことが多いので、少し小さめ(0.1)から試す
-            loadedModel.scale.set(0.1, 0.1, 0.1); 
+            // --- サイズ調整 ---
+            // ★ 前回は見えなくなったので、とりあえず5倍に設定します。
+            // まだ小さい場合は 20 など元の数値に戻してください。
+            loadedModel.scale.set(20, 20, 20); 
 
-            // --- 黒色修正（マテリアルの発光設定） ---
+            // --- マテリアル（色・質感）設定 ---
             const whiteMaterial = new THREE.MeshStandardMaterial({
-                color: 0xffffff,    // 基本の色：白
-                emissive: 0x666666, // 発光色：少し光らせる（これで黒くならない）
-                roughness: 0.3,     // ツルツル具合
-                metalness: 0.1      // 金属感
+                color: 0xffffff,    // 白
+                emissive: 0x444444, // 少し発光させて黒つぶれ防止
+                roughness: 0.3,
+                metalness: 0.1
             });
 
-            // モデル内の全パーツにこの「白い素材」を適用
             rawModel.traverse((child) => {
                 if (child.isMesh) {
                     child.material = whiteMaterial;
                 }
             });
             
-            console.log("モデル読み込み完了、中心補正・白色適用済み");
+            console.log("モデル読み込み完了");
             resolve();
           },
           undefined,
@@ -240,27 +237,27 @@
 
       const { renderer, scene, camera } = mindarThree;
 
-      // ★ 照明の設定（ここを強化）
-      // 1. 環境光（全体を明るくする最強のライト）
-      const ambientLight = new THREE.AmbientLight(0xffffff, 1.0); 
+      // --- 照明設定（しっかり明るく） ---
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1.2); 
       scene.add(ambientLight);
 
-      // 2. 指向性ライト（影をつけるための太陽のような光）
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
       directionalLight.position.set(5, 10, 7); 
       scene.add(directionalLight);
 
+      // ループ処理
       for (let i = 0; i < audios.length; i++) {
         const anchor = mindarThree.addAnchor(i);
 
-        if (loadedModel) {
+        // ★【変更点】ターゲット0番（最初の画像）の時だけモデルを表示
+        if (i === 0 && loadedModel) {
           const modelClone = loadedModel.clone();
           anchor.group.add(modelClone);
           
           animatedModels.push({
              mesh: modelClone,
-             speed: 0.02, // 回転スピード
-             offset: Math.random() * 100 
+             speed: 0.02, // 回転速度
+             offset: 0    // 浮遊タイミング
           });
         }
 
@@ -306,18 +303,19 @@
       await mindarThree.start();
       loadingScreen.style.display = "none"; 
 
-      // アニメーションループ
       renderer.setAnimationLoop(() => {
         const time = performance.now() / 1000; 
 
+        // アニメーション更新
         animatedModels.forEach(item => {
             const model = item.mesh;
             
-            // その場でくるくる回転
+            // くるくる（Y軸回転）
             model.rotation.y += item.speed; 
 
-            // その場でふわふわ（中心補正をしたので綺麗に動くはず）
-            model.position.y = 0.05 + Math.sin(time * 2 + item.offset) * 0.02; 
+            // ふわふわ（上下移動）
+            // 中心補正のおかげで、軸がブレずに綺麗に回るはずです
+            model.position.y = 0.1 + Math.sin(time * 2 + item.offset) * 0.05; 
         });
 
         renderer.render(scene, camera);

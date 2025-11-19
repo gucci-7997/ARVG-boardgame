@@ -206,7 +206,7 @@
       const card3 = new THREE.Mesh(cardGeometry, material3);
       const rulebook = new THREE.Mesh(ruleGeometry, materialRule);
 // カード全体を少し左に寄せる
-      const cardOffsetX = -0.4;
+      const cardOffsetX = 0;
       const cardHeightY = 0.9; // ★高さを上げました
 
       // 左
@@ -221,7 +221,7 @@
       card3.rotation.z = -0.2; 
 
       // ★説明書（右側に配置）
-      rulebook.position.set(0.8, cardHeightY, -0.2); // X:0.8で右側へ、Yはカードと同じくらい
+      rulebook.position.set(1.2, cardHeightY, -0.2); // X:0.8で右側へ、Yはカードと同じくらい
       rulebook.rotation.z = 0; // 少しだけ傾けて自然に
 
       cardGroup.add(card1);
